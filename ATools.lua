@@ -2243,9 +2243,9 @@ function imgui.OnDrawFrame()
 end
 -- main
 function main()
-	print("“вой ид:"..getserial())
-	checkKey()
-    autoupdate("https://raw.githubusercontent.com/codero4ik/atols/main/updates.json", '['..string.upper(thisScript().name)..']: ', "https://raw.githubusercontent.com/codero4ik/atols/main/updates.json")
+	--print("“вой ид:"..getserial())
+	--checkKey()
+    --autoupdate("https://raw.githubusercontent.com/codero4ik/atols/main/updates.json", '['..string.upper(thisScript().name)..']: ', "https://raw.githubusercontent.com/codero4ik/atols/main/updates.json")
     while not isSampAvailable() do wait(100) end
     --bubbleBox = ChatBox(pagesize, mainini.config.blacklist)
     developer()
