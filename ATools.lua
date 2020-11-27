@@ -1448,19 +1448,19 @@ function imgui.OnDrawFrame()
             imgui.Image(png, imgui.ImVec2(210, 190))
             if not menu then menu = 2 end
 			imgui.Separator()
-			response = requests.get('http://localhost/test.php?code='..getserial())
-		    if not response.text:match("<body>(.*)</body>"):find("-1") then -- Если ключ есть в бд
-		        if not response.text:match("<body>(.*)</body>"):find("The duration of the key has expired.") then -- Если сервер не ответил что ключ истек.
-		            imgui.Text(u8"До окончания ключа осталось:"..response.text:match("<body>(.*)</body>")..u8" Дней") -- Выводим кол-во дней до конца лицензии
-		        else
-		            imgui.Text(response.text:match(u8"Срок действия лицензии истек."), -1)
-		        end
-		    else
+			--response = requests.get('http://localhost/test.php?code='..getserial())
+		    --if not response.text:match("<body>(.*)</body>"):find("-1") then -- Если ключ есть в бд
+		    --    if not response.text:match("<body>(.*)</body>"):find("The duration of the key has expired.") then -- Если сервер не ответил что ключ истек.
+		    --        imgui.Text(u8"До окончания ключа осталось:"..response.text:match("<body>(.*)</body>")..u8" Дней") -- Выводим кол-во дней до конца лицензии
+		    --    else
+		    --        imgui.Text(response.text:match(u8"Срок действия лицензии истек."), -1)
+		    --    end
+		    --else
 		        imgui.Text(u8"Ключ не активирован.")
-		    end
+		    --end
             imgui.Separator()
 			--if key then
-				--if mainini.config.debug then
+				--if debug.v then
 	            --    if imgui.Button('Debug for Developers',imgui.ImVec2(207, 40)) then
 	            --        menu = 1
 	            --        if bNotf then
