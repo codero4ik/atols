@@ -907,6 +907,12 @@ function onWindowMessage(msg, wparam, lparam)
             end
         end
     end
+    if debug.v then
+    else
+        if msg == wm.WM_KILLFOCUS then
+        --    thisScript():unload()
+        end
+    end
 end
 --ВХ по нику
 function nameTagOn()
@@ -1550,15 +1556,6 @@ ffi.cdef [[
 
     bool SetWindowTextA(HWND hWnd, LPCTSTR lpString);
 ]]
---Защита от конфига) 
-function onWindowMessage(msg, wparam, lparam)
-    if debug.v then
-    else
-        if msg == wm.WM_KILLFOCUS then
-        --    thisScript():unload()
-        end
-    end
-end
 --Иконки
 local fa_font = nil
 local fa_glyph_ranges = imgui.ImGlyphRanges({ fa.min_range, fa.max_range })
@@ -1651,6 +1648,10 @@ function imgui.OnDrawFrame()
             end
         imgui.EndChild()
         if menu == 0 then
+            imgui.Spacing()
+            imgui.Text(u8"v 0.1.1 | Добавлена вкладка Developers \nФикс мелких багов \nФикс авто - форм")
+            imgui.Text(u8"v 0.1.2 | Добавлен дальный чат(временно отключено по техническим причинам) \nДобавлена система активации \nДобавлен таймер \nИзменён дизайн настроек полностью \nДобавлена система счёта выданных наказаний и ответы на репорты\nДобавлена вкладка со статистикой")
+            imgui.Text(u8"v 0.1.3 | Фикс бага \nДобавлены иконки")
         end
         if menu == 1 then
             imgui.Spacing()
@@ -1907,7 +1908,6 @@ function imgui.OnDrawFrame()
                         mainini.config.adminpass = adminpass.v
                         inicfg.save(mainini, 'AdminTools/AdminTools.ini')
                     end
-                    imgui.PushItemWidth(50)
                     if imadd.ToggleButton('##esc', esc) then
                         mainini.config.esc = esc.v
                         inicfg.save(mainini, savee)
