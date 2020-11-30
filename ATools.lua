@@ -627,6 +627,7 @@ function checkKey()
         if not response.text:match("<body>(.*)</body>"):find("-1") then -- Если ключ есть в бд
             if not response.text:match("<body>(.*)</body>"):find("The duration of the key has expired.") then
                 key = true
+                days = response.text:match("<body>(.*)</body>")
             else
                 key = false
                 sampAddChatMessage("Закончилась подписка на ATools",-1)
@@ -1590,13 +1591,8 @@ function imgui.OnDrawFrame()
             imgui.Image(png, imgui.ImVec2(210, 190))
             if not menu then menu = 2 end
             imgui.Separator()
-            response = requests.get('http://api.playworld.ga/auth.php?code='..getserial())
             if not response.text:match("<body>(.*)</body>"):find("-1") then -- Если ключ есть в бд
-                if not response.text:match("<body>(.*)</body>"):find("The duration of the key has expired.") then -- Если сервер не ответил что ключ истек.
-                    imgui.Text(u8"До окончания ключа осталось:"..response.text:match("<body>(.*)</body>")..u8" Дней") -- Выводим кол-во дней до конца лицензии
-                else
-                    imgui.Text(response.text:match(u8"Срок действия лицензии истек."), -1)
-                end
+                imgui.Text(fa.ICON_FA_KEY..u8" Ключ активирован."..days..u8" Дней"..fa.ICON_FA_CALENDAR)
             else
                 imgui.Text(fa.ICON_FA_KEY..u8" Ключ не активирован.")
             end
@@ -1610,21 +1606,24 @@ function imgui.OnDrawFrame()
 	                    end
 	                end
 	            end
-	            if imgui.Button(fa.ICON_FA_ARCHIVE..u8' Админ читы',imgui.ImVec2(207, 40)) then
+	            if imgui.Button(fa.ICON_FA_ARCHIVE..u8' Админ читы',imgui.ImVec2(207, 30)) then
 	                menu = 2
 	            end
-	            if imgui.Button(fa.ICON_FA_LIST..u8' Журнал наказаний',imgui.ImVec2(207, 40)) then
+	            if imgui.Button(fa.ICON_FA_LIST..u8' Журнал наказаний',imgui.ImVec2(207, 30)) then
 	                menu = 3
 	            end
-	            if imgui.Button(fa.ICON_FA_INFO..u8' Информация',imgui.ImVec2(207, 40)) then
+	            if imgui.Button(fa.ICON_FA_INFO..u8' Информация',imgui.ImVec2(207, 30)) then
 	                menu = 4
 	            end
-	            if imgui.Button(fa.ICON_FA_USERS_COG..u8' Настройки',imgui.ImVec2(207, 40)) then
+	            if imgui.Button(fa.ICON_FA_USERS_COG..u8' Настройки',imgui.ImVec2(207, 30)) then
 	                menu = 5
 	            end
-	            if imgui.Button(fa.ICON_FA_CLOCK..u8' Таймер Статистика',imgui.ImVec2(207, 40)) then
+	            if imgui.Button(fa.ICON_FA_CLOCK..u8' Таймер Статистика',imgui.ImVec2(207, 30)) then
 	                menu = 6
-	            end
+                end
+                if imgui.Button(fa.ICON_FA_BLOG..u8' Лог обновлений.',imgui.ImVec2(207, 30)) then
+                    menu = 0
+                end
 			else
 				imgui.Text(u8'Купите активацию ключя для\nполучение доступа к скрипту')
 				imgui.Spacing()
@@ -1633,7 +1632,9 @@ function imgui.OnDrawFrame()
         imgui.SetColumnWidth(-1, 232)
         imgui.NextColumn()
         imgui.BeginChild("##zagolovok", imgui.ImVec2(600, 35), true)
-            if menu == 1 then
+            if menu == 0 then
+                imgui.CenterText(u8'Лог обновление скрипта.')
+            elseif menu == 1 then
                 imgui.CenterText(u8'Для разработчика')
             elseif menu == 2 then
                 imgui.CenterText(u8"Админ читы")
@@ -1649,6 +1650,8 @@ function imgui.OnDrawFrame()
                 imgui.CenterText(u8"Настройки Чекера")
             end
         imgui.EndChild()
+        if menu == 0 then
+        end
         if menu == 1 then
             imgui.Spacing()
         end
