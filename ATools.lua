@@ -11,16 +11,17 @@ end
 ::visible::
 --Автор и версия
 script_author("Coder,Alex")
-script_version('0.1.2')
+script_version('0.1.3')
 ::hidden::
 --Библиотеки
 require "lib.moonloader"
 require 'lib.sampfuncs'
 local requests = require 'requests' -- для проверки ключа
 local memory = require 'memory' -- для варпа
+local fa = require 'fAwesome5'
 local imgui = require 'imgui' -- GUI
 local bNotf, notf = pcall(import, "imgui_notf.lua") -- Для уведомления
-local flags = require 'moonloader'.font_flag -- Флаги
+local flags = require 'moonloader'.font_flag -- Фласги
 local key = require 'vkeys' -- Клавиши
 local encoding = require 'encoding' -- для язык
 local inicfg = require 'inicfg' -- для конфигов
@@ -52,6 +53,7 @@ local mainini = inicfg.load({
 	},
     config =
     {
+        templeader = false,
         jail = false,
         sban = false,
         ban = false,
@@ -81,6 +83,28 @@ local mainini = inicfg.load({
         godmode = false,
         did = 0,
         debug = false,
+        staticObjectMy = 2905604013,
+        dinamicObjectMy = 9013962961,
+        pedPMy = 1862972872,
+        carPMy = 6282572962,
+        staticObject = 2905604013,
+        dinamicObject = 9013962961,
+        pedP = 1862972872,
+        carP = 6282572962,
+        drawMyBullets = false,
+        drawBullets = true,
+        timeRenderMyBullets = 10,
+        timeRenderBullets = 10, -- время линий
+        sizeOffMyLine = 1,
+        sizeOffLine = 1, -- толщина линий 
+        sizeOffMyPolygonEnd = 1,
+        sizeOffPolygonEnd = 1, -- размер окончания
+        rotationMyPolygonEnd = 10, 
+        rotationPolygonEnd = 10, -- количество углов окончания
+        degreeMyPolygonEnd = 50,
+        degreePolygonEnd = 50,  -- градус поворота окончаний 
+        maxLineMyLimit = 30,
+        maxLineLimit = 30, -- макс кол-во линий
         blacklist = {
             'На паузе %d+:%d+',
             'На паузе %d+ сек.',
@@ -199,6 +223,7 @@ local mainini = inicfg.load({
 local status = inicfg.load(mainini, 'AdminTools/AdminTools.ini')
 if not doesFileExist('moonloader/config/AdminTools/AdminTools.ini') then inicfg.save(mainini, 'AdminTools/AdminTools.ini') end
 --Буфферы
+templeader = imgui.ImBool(mainini.config.templeader)
 key = imgui.ImBool(false)
 secondaryKey = imgui.ImBuffer('' .. mainini.config.secondaryKey,4)
 chat = imgui.ImBool(mainini.config.chat)
@@ -240,6 +265,35 @@ ReportText = imgui.ImBuffer(2560)
 rstat = imgui.ImBuffer(''..mainini.status.report, 999)
 ReportTextOtvet = imgui.ImBuffer(2560)
 active_menu = imgui.ImBool(false)
+-- BOOL
+local elements = {
+    checkbox = {
+        drawMyBullets = imgui.ImBool(mainini.config.drawMyBullets),
+        drawBullets = imgui.ImBool(mainini.config.drawBullets)
+    },
+    int = {
+        timeRenderMyBullets = imgui.ImInt(mainini.config.timeRenderMyBullets),
+        timeRenderBullets = imgui.ImInt(mainini.config.timeRenderBullets),
+        sizeOffMyLine = imgui.ImInt(mainini.config.sizeOffMyLine),
+        sizeOffLine = imgui.ImInt(mainini.config.sizeOffLine),
+        sizeOffMyPolygonEnd = imgui.ImInt(mainini.config.sizeOffMyPolygonEnd),
+        sizeOffPolygonEnd = imgui.ImInt(mainini.config.sizeOffPolygonEnd),
+        rotationMyPolygonEnd = imgui.ImInt(mainini.config.rotationMyPolygonEnd),
+        rotationPolygonEnd = imgui.ImInt(mainini.config.rotationPolygonEnd),
+        degreeMyPolygonEnd = imgui.ImInt(mainini.config.degreeMyPolygonEnd),
+        degreePolygonEnd = imgui.ImInt(mainini.config.degreePolygonEnd),
+        maxLineMyLimit = imgui.ImInt(mainini.config.maxLineMyLimit),
+        maxLineLimit = imgui.ImInt(mainini.config.maxLineLimit)
+    }
+}
+local bulletSync = {lastId = 0, maxLines = elements.int.maxLineLimit.v}
+for i = 1, bulletSync.maxLines do
+	bulletSync[i] = { other = {time = 0, t = {x,y,z}, o = {x,y,z}, type = 0, color = 0}}
+end
+local bulletSyncMy = {lastId = 0, maxLines = elements.int.maxLineMyLimit.v}
+for i = 1, bulletSyncMy.maxLines do
+    bulletSyncMy[i] = { my = {time = 0, t = {x,y,z}, o = {x,y,z}, type = 0, color = 0}}
+end
 --Лог
 local logText = {} -- Буфер для логов
 local logFilter = imgui.ImBuffer(128) -- максимальный буфер
@@ -340,9 +394,10 @@ function getserial()
 end
 -- система debug
 function developer()
-    local _, id = sampGetPlayerIdByCharHandle(playerPed)
-    if sampGetPlayerNickname(id) == 'Nikita_Dobrov' or 'Hola_Bola' then
+    id = getserial()
+    if id == '1785546077' then
         mainini.config.debug = true
+        inicfg.save(mainini, savee)
     else
         mainini.config.debug = false
         inicfg.save(mainini, savee)
@@ -355,31 +410,31 @@ end
 function sampev.onTogglePlayerSpectating(state) recon = state end -- если вы админ, то в реконе скрипт будет отключать табличку, сделал чисто для себя, если надо - удалите
 -- система таймера
 function time()
-	startTime = os.time()                                               -- "Точка отсчёта"
+	startTime = os.time() -- "Точка отсчёта"
     connectingTime = 0
     while true do
         wait(1000)
         nowTime = os.date("%H:%M:%S", os.time())
-        if sampGetGamestate() == 3 then 								-- Игровой статус равен "Подключён к серверу" (Что бы онлайн считало только, когда, мы подключены к серверу)
-	        sesOnline.v = sesOnline.v + 1 								-- Онлайн за сессию без учёта АФК
-	        sesFull.v = os.time() - startTime 							-- Общий онлайн за сессию
-	        sesAfk.v = sesFull.v - sesOnline.v							-- АФК за сессию
+        if sampGetGamestate() == 3 then -- Игровой статус равен "Подключён к серверу" (Что бы онлайн считало только, когда, мы подключены к серверу)
+	        sesOnline.v = sesOnline.v + 1 -- Онлайн за сессию без учёта АФК
+	        sesFull.v = os.time() - startTime -- Общий онлайн за сессию
+	        sesAfk.v = sesFull.v - sesOnline.v	-- АФК за сессию
 
-	        mainini.onDay.online = mainini.onDay.online + 1 					-- Онлайн за день без учёта АФК
-	        mainini.onDay.full = dayFull.v + sesFull.v 						-- Общий онлайн за день
-	        mainini.onDay.afk = mainini.onDay.full - mainini.onDay.online			-- АФК за день
+	        mainini.onDay.online = mainini.onDay.online + 1 -- Онлайн за день без учёта АФК
+	        mainini.onDay.full = dayFull.v + sesFull.v -- Общий онлайн за день
+	        mainini.onDay.afk = mainini.onDay.full - mainini.onDay.online -- АФК за день
 
-	        mainini.onWeek.online = mainini.onWeek.online + 1 					-- Онлайн за неделю без учёта АФК
-	        mainini.onWeek.full = weekFull.v + sesFull.v 					-- Общий онлайн за неделю
-	        mainini.onWeek.afk = mainini.onWeek.full - mainini.onWeek.online		-- АФК за неделю
+	        mainini.onWeek.online = mainini.onWeek.online + 1 -- Онлайн за неделю без учёта АФК
+	        mainini.onWeek.full = weekFull.v + sesFull.v -- Общий онлайн за неделю
+	        mainini.onWeek.afk = mainini.onWeek.full - mainini.onWeek.online -- АФК за неделю
 
             local today = tonumber(os.date('%w', os.time()))
             mainini.myWeekOnline[today] = mainini.onDay.full
 
             connectingTime = 0
 	    else
-            connectingTime = connectingTime + 1                         -- Вермя подключения к серверу
-	    	startTime = startTime + 1									-- Смещение начала отсчета таймеров
+            connectingTime = connectingTime + 1 -- Вермя подключения к серверу
+	    	startTime = startTime + 1 -- Смещение начала отсчета таймеров
 	    end
     end
 end
@@ -563,21 +618,27 @@ function autoupdate(json_url, prefix, url)
 end
 --Ключ
 function checkKey()
-    response = requests.get('http://localhost/test.php?code='..getserial())
-    if not response.text:match("<body>(.*)</body>"):find("-1") then -- Если ключ есть в бд
-        if not response.text:match("<body>(.*)</body>"):find("The duration of the key has expired.") then
-			key = true
-        else
-			key = false
-			sampAddChatMessage("Закончилась подписка на ATools",-1)
-			wait(10)
-			unload()
+    if debug.v then
+        if bNotf then
+            notf.addNotification(("Привет Developers!"), 4, 3)
         end
     else
-		key = false
-        sampAddChatMessage("Ключ не активирован.",-1)
-		wait(10)
-		unload()
+        response = requests.get('http://api.playworld.ga/auth.php?code='..getserial())
+        if not response.text:match("<body>(.*)</body>"):find("-1") then -- Если ключ есть в бд
+            if not response.text:match("<body>(.*)</body>"):find("The duration of the key has expired.") then
+                key = true
+            else
+                key = false
+                sampAddChatMessage("Закончилась подписка на ATools",-1)
+                wait(10)
+                thisScript():unload()
+            end
+        else
+            key = false
+            sampAddChatMessage("Ключ не активирован. Ваш ключ: "..getserial(),-1)
+            wait(10)
+            thisScript():unload()
+        end
     end
 end
 -- сброс
@@ -598,8 +659,20 @@ function sampev.onPlayerChatBubble(playerId, color, distance, duration, message)
 		bubbleBox:add_message(playerId, color, distance, message)
 	end
 end
+-- event отправленных команд
+function sampev.onSendCommand(param)
+	if param:find('reoff') then
+		sampAddChatMessage('re off', -1)
+	end
+	if param:match('re %d+') then
+		sampAddChatMessage('re on',-1)
+	end
+end
 -- event чата
 function sampev.onServerMessage(color, text)
+    if templeader.v and text:find('') then
+        templead = true
+    end
     if jail.v and text:find('%[A%] (.*): /jail (.+)') then
         lua_thread.create(function()
             txt = text:match("/jail (.+)")
@@ -769,7 +842,7 @@ function sampev.onShowDialog(id, style, title, button1, button2, text)
     --if id == 2 then
     --end
     if id == 211 and adminpassACT.v then
-        sampSendDialogResponse(id, 1, _,mainini.config.adminpass)
+        sampSendDialogResponse(id, 1, _, mainini.config.adminpass)
         return false
     end
 end
@@ -794,6 +867,33 @@ function sampev.onPlayerQuit(id, reason)
     end
     if bNotf then
         notf.addNotification(("Вышел\n"..nick.."["..id.."]\nПричина: "..reas.."["..reason.."]"), 4, 2)
+    end
+end
+-- event
+function sampev.onSendBulletSync(data)
+    if elements.checkbox.drawMyBullets.v then
+        if data.center.x ~= 0 then
+            if data.center.y ~= 0 then
+                if data.center.z ~= 0 then
+                    bulletSyncMy.lastId = bulletSyncMy.lastId + 1
+                    if bulletSyncMy.lastId < 1 or bulletSyncMy.lastId > bulletSyncMy.maxLines then
+                        bulletSyncMy.lastId = 1
+                    end
+                    bulletSyncMy[bulletSyncMy.lastId].my.time = os.time() + elements.int.timeRenderMyBullets.v
+                    bulletSyncMy[bulletSyncMy.lastId].my.o.x, bulletSyncMy[bulletSyncMy.lastId].my.o.y, bulletSyncMy[bulletSyncMy.lastId].my.o.z = data.origin.x, data.origin.y, data.origin.z
+                    bulletSyncMy[bulletSyncMy.lastId].my.t.x, bulletSyncMy[bulletSyncMy.lastId].my.t.y, bulletSyncMy[bulletSyncMy.lastId].my.t.z = data.target.x, data.target.y, data.target.z
+                    if data.targetType == 0 then
+                        bulletSyncMy[bulletSyncMy.lastId].my.color = join_argb(255, staticObjectMy.v[1]*255, staticObjectMy.v[2]*255, staticObjectMy.v[3]*255)
+                    elseif data.targetType == 1 then
+                        bulletSyncMy[bulletSyncMy.lastId].my.color = join_argb(255, pedPMy.v[1]*255, pedPMy.v[2]*255, pedPMy.v[3]*255)
+                    elseif data.targetType == 2 then
+                        bulletSyncMy[bulletSyncMy.lastId].my.color = join_argb(255, carPMy.v[1]*255, carPMy.v[2]*255, carPMy.v[3]*255)
+                    elseif data.targetType == 4 then
+                        bulletSyncMy[bulletSyncMy.lastId].my.color = join_argb(255, dinamicObjectMy.v[1]*255, dinamicObjectMy.v[2]*255, dinamicObjectMy.v[3]*255)
+                    end
+                end
+            end
+        end
     end
 end
 -- активация меню
@@ -845,10 +945,37 @@ function sampev.onSetPlayerHealth()
         return false
     end
 end
---ГМ
-function sampev.onBulletSync()
+--ГМ + Трайсер
+function sampev.onBulletSync(playerid, data)
+    --ГМ
     if godmode.v then
         return false
+    end
+    --Трайсер
+    if elements.checkbox.drawBullets.v then
+        if data.center.x ~= 0 then
+            if data.center.y ~= 0 then
+                if data.center.z ~= 0 then
+                    bulletSync.lastId = bulletSync.lastId + 1
+                    if bulletSync.lastId < 1 or bulletSync.lastId > bulletSync.maxLines then
+                        bulletSync.lastId = 1
+                    end
+                    bulletSync[bulletSync.lastId].other.time = os.time() + elements.int.timeRenderBullets.v
+                    bulletSync[bulletSync.lastId].other.o.x, bulletSync[bulletSync.lastId].other.o.y, bulletSync[bulletSync.lastId].other.o.z = data.origin.x, data.origin.y, data.origin.z
+                    bulletSync[bulletSync.lastId].other.t.x, bulletSync[bulletSync.lastId].other.t.y, bulletSync[bulletSync.lastId].other.t.z = data.target.x, data.target.y, data.target.z
+                    bulletSync[bulletSync.lastId].other.type = data.targetType
+                    if data.targetType == 0 then
+                        bulletSync[bulletSync.lastId].other.color = join_argb(255, staticObject.v[1]*255, staticObject.v[2]*255, staticObject.v[3]*255)
+                    elseif data.targetType == 1 then
+                        bulletSync[bulletSync.lastId].other.color = join_argb(255, pedP.v[1]*255, pedP.v[2]*255, pedP.v[3]*255)
+                    elseif data.targetType == 2 then
+                        bulletSync[bulletSync.lastId].other.color = join_argb(255, carP.v[1]*255, carP.v[2]*255, carP.v[3]*255)
+                    elseif data.targetType == 4 then
+                        bulletSync[bulletSync.lastId].other.color = join_argb(255, dinamicObject.v[1]*255, dinamicObject.v[2]*255, dinamicObject.v[3]*255)
+                    end
+                end
+            end
+        end
     end
 end
 --центровка текста
@@ -1424,14 +1551,29 @@ ffi.cdef [[
 ]]
 --Защита от конфига) 
 function onWindowMessage(msg, wparam, lparam)
-  if msg == wm.WM_KILLFOCUS then
-    thisScript():unload()
-  end
+    if debug.v then
+    else
+        if msg == wm.WM_KILLFOCUS then
+        --    thisScript():unload()
+        end
+    end
+end
+--Иконки
+local fa_font = nil
+local fa_glyph_ranges = imgui.ImGlyphRanges({ fa.min_range, fa.max_range })
+function imgui.BeforeDrawFrame()
+    if fa_font == nil then
+        local font_config = imgui.ImFontConfig() -- to use 'imgui.ImFontConfig.new()' on error
+        font_config.MergeMode = true
+
+        fa_font = imgui.GetIO().Fonts:AddFontFromFileTTF('moonloader/config/resource/fonts/fa-solid-900.ttf', 13.0, font_config, fa_glyph_ranges)
+    end
 end
 -- Окна
 function imgui.OnDrawFrame()
     apply_custom_style()
     local tLastKeys = {}
+    -- Основное меню и т.д
     if active_menu.v then
         local x, y = getScreenResolution()
         imgui.GetStyle().Colors[imgui.Col.Text] = imgui.ImVec4(1.00,1.00,1.00,1.00)
@@ -1447,46 +1589,46 @@ function imgui.OnDrawFrame()
         imgui.BeginChild("##menubok", imgui.ImVec2(225, 480), true)
             imgui.Image(png, imgui.ImVec2(210, 190))
             if not menu then menu = 2 end
-			imgui.Separator()
-			--response = requests.get('http://localhost/test.php?code='..getserial())
-		    --if not response.text:match("<body>(.*)</body>"):find("-1") then -- Если ключ есть в бд
-		    --    if not response.text:match("<body>(.*)</body>"):find("The duration of the key has expired.") then -- Если сервер не ответил что ключ истек.
-		    --        imgui.Text(u8"До окончания ключа осталось:"..response.text:match("<body>(.*)</body>")..u8" Дней") -- Выводим кол-во дней до конца лицензии
-		    --    else
-		    --        imgui.Text(response.text:match(u8"Срок действия лицензии истек."), -1)
-		    --    end
-		    --else
-		        imgui.Text(u8"Ключ не активирован.")
-		    --end
             imgui.Separator()
-			--if key then
-				--if debug.v then
-	            --    if imgui.Button('Debug for Developers',imgui.ImVec2(207, 40)) then
-	            --        menu = 1
-	            --        if bNotf then
-	            --            notf.addNotification(("Вкладка Developers!"), 4, 2)
-	            --        end
-	            --    end
-	            --end
-	            if imgui.Button(u8'Админ читы',imgui.ImVec2(207, 40)) then
+            response = requests.get('http://api.playworld.ga/auth.php?code='..getserial())
+            if not response.text:match("<body>(.*)</body>"):find("-1") then -- Если ключ есть в бд
+                if not response.text:match("<body>(.*)</body>"):find("The duration of the key has expired.") then -- Если сервер не ответил что ключ истек.
+                    imgui.Text(u8"До окончания ключа осталось:"..response.text:match("<body>(.*)</body>")..u8" Дней") -- Выводим кол-во дней до конца лицензии
+                else
+                    imgui.Text(response.text:match(u8"Срок действия лицензии истек."), -1)
+                end
+            else
+                imgui.Text(fa.ICON_FA_KEY..u8" Ключ не активирован.")
+            end
+            imgui.Separator()
+			if key then
+				if debug.v then
+	                if imgui.Button('Debug for Developers',imgui.ImVec2(207, 40)) then
+	                    menu = 1
+	                    if bNotf then
+	                        notf.addNotification(("Вкладка Developers!"), 4, 2)
+	                    end
+	                end
+	            end
+	            if imgui.Button(fa.ICON_FA_ARCHIVE..u8' Админ читы',imgui.ImVec2(207, 40)) then
 	                menu = 2
 	            end
-	            if imgui.Button(u8'Журнал наказаний',imgui.ImVec2(207, 40)) then
+	            if imgui.Button(fa.ICON_FA_LIST..u8' Журнал наказаний',imgui.ImVec2(207, 40)) then
 	                menu = 3
 	            end
-	            if imgui.Button(u8'Информация',imgui.ImVec2(207, 40)) then
+	            if imgui.Button(fa.ICON_FA_INFO..u8' Информация',imgui.ImVec2(207, 40)) then
 	                menu = 4
 	            end
-	            if imgui.Button(u8'Настройки',imgui.ImVec2(207, 40)) then
+	            if imgui.Button(fa.ICON_FA_USERS_COG..u8' Настройки',imgui.ImVec2(207, 40)) then
 	                menu = 5
 	            end
-	            if imgui.Button(u8'Таймер Статистика',imgui.ImVec2(207, 40)) then
+	            if imgui.Button(fa.ICON_FA_CLOCK..u8' Таймер Статистика',imgui.ImVec2(207, 40)) then
 	                menu = 6
 	            end
-			--else
+			else
 				imgui.Text(u8'Купите активацию ключя для\nполучение доступа к скрипту')
 				imgui.Spacing()
-			--end
+			end
         imgui.EndChild()
         imgui.SetColumnWidth(-1, 232)
         imgui.NextColumn()
@@ -1651,218 +1793,329 @@ function imgui.OnDrawFrame()
             imgui.EndChild()
             imgui.SameLine()
             imgui.BeginChild('##Customisation', imgui.ImVec2(-1, 415), true)
-                imgui.PushFont(fsClock) imgui.CenterTextColoredRGB('Таймер') imgui.PopFont()
-        	    if imadd.ToggleButton(u8('##State'), to) then
-		    		mainini.statTimers.state = to.v
-		    		inicfg.save(mainini, 'AdminTools/AdminTools.ini')
-		    	end
-		    	imgui.SameLine()
-		    	if to.v then
-		    		imgui.TextColored(imgui.ImVec4(0.00, 0.53, 0.76, 1.00), u8'Включен Таймер')
-		    	else
-		    		imgui.TextDisabled(u8'Выключен Таймер')
-		    	end
-        	    if imgui.Button(u8'Местоположение таймера', imgui.ImVec2(-1, 20)) then
-	                lua_thread.create(function ()
-	                    checkCursor = true
-	                    sampSetCursorMode(4)
-	                	sampAddChatMessage(tag..'Нажмите {0087FF}SPACE{FFFFFF} что-бы сохранить позицию', mcx)
-	                    while checkCursor do
-	                        local cX, cY = getCursorPos()
-	                        posX, posY = cX, cY
-	                        if isKeyDown(32) then
-	                        	sampSetCursorMode(0)
-	                        	mainini.pos.x, mainini.pos.y = posX, posY
-	                            checkCursor = false
-	                            if inicfg.save(mainini, 'AdminTools/AdminTools.ini') then sampAddChatMessage(tag..'Позиция сохранена!', mcx) end
-	                        end
-	                        wait(0)
-	                    end
-	                end)
-	            end
-	            if mainini.statTimers.server == sampGetCurrentServerAddress() then
-	                if imgui.Button(u8(sampGetCurrentServerName()), imgui.ImVec2(-1, 20)) then
-	                    mainini.statTimers.server = nil
-	                    sampAddChatMessage(tag..'Теперь этот сервер не считается основным!', mcx)
-	                end
-	            else
-	                if imgui.Button(u8'Установить этот сервер основным', imgui.ImVec2(-1, 20)) then
-	                    mainini.statTimers.server = sampGetCurrentServerAddress()
-	                    sampAddChatMessage(tag..'Теперь онлайн будет считаться только на этом сервере!', mcx)
-	                end
-	                imgui.Hint(u8'Скрипт будет запускаться только на этом сервере!')
-	            end
-        	    imgui.PushItemWidth(-1)
-                imgui.PopItemWidth()
-                if imgui.ColorEdit4(u8'Цвет фона', colorW, imgui.ColorEditFlags.NoInputs) then
-		            argbW = imgui.ImColor.FromFloat4(colorW.v[1], colorW.v[2], colorW.v[3], colorW.v[4]):GetU32()
-		            mainini.style.colorW = argbW
+                if imgui.CollapsingHeader(u8"[Таймер] Настройка") then
+                    if imadd.ToggleButton(u8('##State'), to) then
+                        mainini.statTimers.state = to.v
+                        inicfg.save(mainini, 'AdminTools/AdminTools.ini')
+                    end
+                    imgui.SameLine()
+                    if to.v then
+                        imgui.TextColored(imgui.ImVec4(0.00, 0.53, 0.76, 1.00), u8'Включен Таймер')
+                    else
+                        imgui.TextDisabled(u8'Выключен Таймер')
+                    end
+                    if imgui.Button(u8'Местоположение таймера', imgui.ImVec2(-1, 20)) then
+                        lua_thread.create(function ()
+                            checkCursor = true
+                            sampSetCursorMode(4)
+                            sampAddChatMessage(tag..'Нажмите {0087FF}SPACE{FFFFFF} что-бы сохранить позицию', mcx)
+                            while checkCursor do
+                                local cX, cY = getCursorPos()
+                                posX, posY = cX, cY
+                                if isKeyDown(32) then
+                                    sampSetCursorMode(0)
+                                    mainini.pos.x, mainini.pos.y = posX, posY
+                                    checkCursor = false
+                                    if inicfg.save(mainini, 'AdminTools/AdminTools.ini') then sampAddChatMessage(tag..'Позиция сохранена!', mcx) end
+                                end
+                                wait(0)
+                            end
+                        end)
+                    end
+                    if mainini.statTimers.server == sampGetCurrentServerAddress() then
+                        if imgui.Button(u8(sampGetCurrentServerName()), imgui.ImVec2(-1, 20)) then
+                            mainini.statTimers.server = nil
+                            sampAddChatMessage(tag..'Теперь этот сервер не считается основным!', mcx)
+                        end
+                    else
+                        if imgui.Button(u8'Установить этот сервер основным', imgui.ImVec2(-1, 20)) then
+                            mainini.statTimers.server = sampGetCurrentServerAddress()
+                            sampAddChatMessage(tag..'Теперь онлайн будет считаться только на этом сервере!', mcx)
+                        end
+                        imgui.Hint(u8'Скрипт будет запускаться только на этом сервере!')
+                    end
+                    imgui.PushItemWidth(-1)
+                    imgui.PopItemWidth()
+                    if imgui.ColorEdit4(u8'Цвет фона', colorW, imgui.ColorEditFlags.NoInputs) then
+                        argbW = imgui.ImColor.FromFloat4(colorW.v[1], colorW.v[2], colorW.v[3], colorW.v[4]):GetU32()
+                        mainini.style.colorW = argbW
+                    end
+                    imgui.SameLine()
+                    if imgui.ColorEdit4(u8'Цвет текста', colorT, imgui.ColorEditFlags.NoInputs) then
+                        argbT = imgui.ImColor.FromFloat4(colorT.v[1], colorT.v[2], colorT.v[3], colorT.v[4]):GetU32()
+                        mainini.style.colorT = argbT
+                    end
                 end
-                imgui.SameLine()
-		        if imgui.ColorEdit4(u8'Цвет текста', colorT, imgui.ColorEditFlags.NoInputs) then
-		            argbT = imgui.ImColor.FromFloat4(colorT.v[1], colorT.v[2], colorT.v[3], colorT.v[4]):GetU32()
-		            mainini.style.colorT = argbT
+                if imgui.CollapsingHeader(u8"[Дальний чат] Настройка") then
+                    --if imgui.Checkbox(u8"Дальний чат ", chat) then
+                        --mainini.config.chat = chat.v
+                        --inicfg.save(mainini, savee)
+                    --end
+                    --imgui.SameLine()
+                    --if imgui.Button(u8'Местоположение дальний чат', imgui.ImVec2(-1, 20)) then
+                    --    lua_thread.create(function ()
+                    --        checkCursor = true
+                    --        sampSetCursorMode(4)
+                    --    	sampAddChatMessage(tag..'Нажмите {0087FF}SPACE{FFFFFF} что-бы сохранить позицию', mcx)
+                    --        while checkCursor do
+                    --            local cX, cY = getCursorPos()
+                    --            сposX, сposY = cX, cY
+                    --            if isKeyDown(32) then
+                    --            	sampSetCursorMode(0)
+                    --            	mainini.cpos.x, mainini.cpos.y = сposX, сposY
+                    --                checkCursor = false
+                    --                if inicfg.save(mainini, 'AdminTools/AdminTools.ini') then sampAddChatMessage(tag..'Позиция сохранена!', mcx) end
+                    --            end
+                    --            wait(0)
+                    --        end
+                    --    end)
+                    --end
+                    --imgui.Text(u8"Размер истории сообщений")
+                    --imgui.SameLine()
+                    --imgui.PushItemWidth(100)
+                    --if imgui.InputText(u8'##messagesMax', messagesMax) then
+                    --    mainini.config.messagesMax = messagesMax.v
+                    --    inicfg.save(mainini, savee)
+                    --end
+                    --imgui.Text(u8"Максимальное кол-тво сообщений")
+                    --imgui.SameLine()
+                    --imgui.PushItemWidth(100)
+                    --if imgui.InputText(u8'##pagesize', pagesize) then
+                    --    mainini.config.pagesize  = pagesize.v
+                    --    inicfg.save(mainini, savee)
+                    --end
+                    --imgui.Text(u8"Кнопка для прокрутки сообщений")
+                    --imgui.SameLine()
+                    --imgui.PushItemWidth(100)
+                    --if imgui.InputText(u8'##secondaryKey', secondaryKey) then
+                    --    mainini.config.secondaryKey = secondaryKey.v
+                    --    inicfg.save(mainini, savee)
+                    --end
                 end
-                imgui.PushFont(fsClock) imgui.CenterTextColoredRGB('Дальний чат') imgui.PopFont()
-                if imgui.Checkbox(u8"Дальний чат ", chat) then
-                    --mainini.config.chat = chat.v
-                    --inicfg.save(mainini, savee)
+                if imgui.CollapsingHeader(u8"[ATools] Настройка") then
+                    if imadd.ToggleButton('##adminpassACT', adminpassACT) then
+                        mainini.config.adminpassACT = adminpassACT.v
+                    end
+                    imgui.SameLine()
+                    imgui.Text(u8"Автоматически вход в админ-панели")
+                    imgui.SameLine()
+                    imgui.PushItemWidth(100)
+                    if imgui.InputText(u8'##adminpass', adminpass) then
+                        mainini.config.adminpass = adminpass.v
+                        inicfg.save(mainini, 'AdminTools/AdminTools.ini')
+                    end
+                    imgui.PushItemWidth(50)
+                    if imadd.ToggleButton('##esc', esc) then
+                        mainini.config.esc = esc.v
+                        inicfg.save(mainini, savee)
+                    end
+                    imgui.SameLine()
+                    imgui.Text(u8"Закрывать Admin Tools на ESC")
+                    if imadd.ToggleButton('##jail', jail) then
+                        mainini.config.jail = jail.v
+                        inicfg.save(mainini, savee)
+                    end
+                    imgui.SameLine()
+                    imgui.Text(u8"Автоматически принимать форму для /jail   ")
+                    imgui.SameLine()
+                    if imgui.Button(u8'Меню##1') then
+                        jailmenu = true
+                    end
+                    imgui.Spacing()
+                    if imadd.ToggleButton('##warn', warn) then
+                        mainini.config.warn = warn.v
+                        inicfg.save(mainini, savee)
+                    end
+                    imgui.SameLine()
+                    imgui.Text(u8"Автоматически принимать форму для /warn")
+                    imgui.SameLine()
+                    if imgui.Button(u8'Меню##2') then
+                        warnmenu = true
+                    end
+                    imgui.Spacing()
+                    if imadd.ToggleButton('##mute', mute) then
+                        mainini.config.mute = mute.v
+                        inicfg.save(mainini, savee)
+                    end
+                    imgui.SameLine()
+                    imgui.Text(u8"Автоматически принимать форму для /mute")
+                    imgui.SameLine()
+                    if imgui.Button(u8'Меню##3') then
+                        mutemenu = true
+                    end
+                    imgui.Spacing()
+                    if imadd.ToggleButton('##sban', sban) then
+                        mainini.config.sban = sban.v
+                        inicfg.save(mainini, savee)
+                    end
+                    imgui.SameLine()
+                    imgui.Text(u8"Автоматически принимать форму для /sban ")
+                    imgui.SameLine()
+                    if imgui.Button(u8'Меню##4') then
+                        sbanmenu = true
+                    end
+                    if imadd.ToggleButton('##ban', ban) then
+                        mainini.config.ban = ban.v
+                        inicfg.save(mainini, savee)
+                    end
+                    imgui.SameLine()
+                    imgui.Text(u8"Автоматически принимать форму для /ban   ")
+                    imgui.SameLine()
+                    if imgui.Button(u8'Меню##5') then
+                        banmenu = true
+                    end
+                    imgui.Spacing()
+                    if imadd.ToggleButton('##skick', skick) then
+                        mainini.config.skick = skick.v
+                        inicfg.save(mainini, savee)
+                    end
+                    imgui.SameLine()
+                    imgui.Text(u8"Автоматически принимать форму для /skick ")
+                    imgui.SameLine()
+                    if imgui.Button(u8'Меню##6') then
+                        skickmenu = true
+                    end
+                    imgui.Spacing()
+                    if imadd.ToggleButton('##kick', kick) then
+                        mainini.config.kick = kick.v
+                        inicfg.save(mainini, savee)
+                    end
+                    imgui.SameLine()
+                    imgui.Text(u8"Автоматически принимать форму для /kick  ")
+                    imgui.SameLine()
+                    if imgui.Button(u8'Меню##7') then
+                        kickmenu = true
+                    end
+                    imgui.Spacing()
+                    if imadd.ToggleButton('##report', report) then
+                        mainini.config.report = report.v
+                        inicfg.save(mainini, savee)
+                    end
+                    imgui.SameLine()
+                    imgui.Text(u8"Автоматически брать репорт")
                 end
-                imgui.SameLine()
-                if imgui.Button(u8'Местоположение дальний чат', imgui.ImVec2(-1, 20)) then
-	                lua_thread.create(function ()
-	                    checkCursor = true
-	                    sampSetCursorMode(4)
-	                	sampAddChatMessage(tag..'Нажмите {0087FF}SPACE{FFFFFF} что-бы сохранить позицию', mcx)
-	                    while checkCursor do
-	                        local cX, cY = getCursorPos()
-	                        сposX, сposY = cX, cY
-	                        if isKeyDown(32) then
-	                        	sampSetCursorMode(0)
-	                        	mainini.cpos.x, mainini.cpos.y = сposX, сposY
-	                            checkCursor = false
-	                            if inicfg.save(mainini, 'AdminTools/AdminTools.ini') then sampAddChatMessage(tag..'Позиция сохранена!', mcx) end
-	                        end
-	                        wait(0)
-	                    end
-	                end)
+                if imgui.CollapsingHeader(u8"[Трейсер пуль]Настройка своих пуль") then
+                    imgui.Separator()
+                    if imgui.Checkbox(u8"[Вкл/выкл] Отрисовку своих пуль", elements.checkbox.drawMyBullets) then
+                        mainini.config.drawMyBullets = elements.checkbox.drawMyBullets.v 
+                    end
+                    imgui.PushItemWidth(175)
+                    if imgui.SliderInt("##bulletsMyTime1", elements.int.timeRenderMyBullets, 5, 40) then
+                        mainini.config.timeRenderMyBullets = elements.int.timeRenderMyBullets.v
+                    end 
+                    imgui.SameLine() 
+                    imgui.Text(u8"Время задержки трейсера")
+                    if imgui.SliderInt("##renderWidthLinesTwo1", elements.int.sizeOffMyLine, 1, 10) then
+                        mainini.config.sizeOffMyLine = elements.int.sizeOffMyLine.v
+                    end 
+                    imgui.SameLine() 
+                    imgui.Text(u8"Толщина линий")
+                    if imgui.SliderInt('##sizeTraicerEnd1', elements.int.sizeOffMyPolygonEnd, 1, 10) then
+                        mainini.config.sizeOffMyPolygonEnd = elements.int.sizeOffMyPolygonEnd.v
+                    end  
+                    imgui.SameLine() 
+                    imgui.Text(u8"Размер окончания трейсера")
+                    if imgui.SliderInt('##endNumber1s', elements.int.rotationMyPolygonEnd, 2, 10) then
+                        mainini.config.rotationMyPolygonEnd = elements.int.rotationMyPolygonEnd.v 
+                    end 
+                    imgui.SameLine() 
+                    imgui.Text(u8"Количество углов на окончаниях")
+                    if imgui.SliderInt('##rotationOne1', elements.int.degreeMyPolygonEnd, 0, 360) then
+                        mainini.config.degreeMyPolygonEnd = elements.int.degreeMyPolygonEnd.v
+                    end 
+                    imgui.SameLine() 
+                    imgui.Text(u8"Градус поворота окончания")
+                    if imgui.SliderInt('##maxMyBullets1', elements.int.maxLineMyLimit, 10, 300) then
+                        mainini.config.maxLineMyLimit = elements.int.maxLineMyLimit.v
+                    end 
+                    imgui.SameLine() 
+                    imgui.Text(u8"Максимальное количество линий")
+                    imgui.PopItemWidth()
+                    imgui.Separator()
+                    imgui.Text(u8"Укажите цвет трейсера, если: ")
+                    if imgui.ColorEdit4("##dinamicObjectMy", dinamicObjectMy, imgui.ColorEditFlags.NoInputs) then
+                        mainini.config.colorMyBulletNePopal = imgui.ImColor(imgui.ImColor.FromFloat4(dinamicObjectMy.v[3], dinamicObjectMy.v[2], dinamicObjectMy.v[1], dinamicObjectMy.v[4]):GetVec4()):GetU32()
+                    end 
+                    imgui.SameLine() 
+                    imgui.Text(u8"Вы попали в динамический объект")
+                    if imgui.ColorEdit4("##staticObjectMy", staticObjectMy, imgui.ColorEditFlags.NoInputs) then
+                        mainini.config.staticObjectMy = imgui.ImColor(imgui.ImColor.FromFloat4(staticObjectMy.v[3], staticObjectMy.v[2], staticObjectMy.v[1], staticObjectMy.v[4]):GetVec4()):GetU32()
+                    end 
+                    imgui.SameLine() 
+                    imgui.Text(u8"Вы попали в статический объект")
+                    if imgui.ColorEdit4("##pedMy", pedPMy, imgui.ColorEditFlags.NoInputs) then
+                        mainini.config.pedPMy = imgui.ImColor(imgui.ImColor.FromFloat4(pedPMy.v[3], pedPMy.v[2], pedPMy.v[1], pedPMy.v[4]):GetVec4()):GetU32()
+                    end 
+                    imgui.SameLine() 
+                    imgui.Text(u8"Вы попали в игрока")
+                    if imgui.ColorEdit4("##carMy", carPMy, imgui.ColorEditFlags.NoInputs) then
+                        mainini.config.carPMy = imgui.ImColor(imgui.ImColor.FromFloat4(carPMy.v[3], carPMy.v[2], carPMy.v[1], carPMy.v[4]):GetVec4()):GetU32()
+                    end 
+                    imgui.SameLine() 
+                    imgui.Text(u8"Вы попали в машину")
+                    imgui.Separator()
                 end
-                imgui.Text(u8"Размер истории сообщений")
-                imgui.SameLine()
-                imgui.PushItemWidth(100)
-                if imgui.InputText(u8'##messagesMax', messagesMax) then
-                    mainini.config.messagesMax = messagesMax.v
-                    inicfg.save(mainini, savee)
+                if imgui.CollapsingHeader(u8"[Трейсер пуль]Настройка чужих пуль") then
+                    imgui.Separator()
+                    if imgui.Checkbox(u8"[Вкл/выкл] Отрисовку чужих пуль", elements.checkbox.drawBullets) then
+                        mainini.config.drawBullets = elements.checkbox.drawBullets.v
+                    end
+                    imgui.PushItemWidth(175)
+                    if imgui.SliderInt("##bulletsTime2", elements.int.timeRenderBullets, 5, 40) then
+                        mainini.config.timeRenderBullets = elements.int.timeRenderBullets.v
+                    end 
+                    imgui.SameLine() 
+                    imgui.Text(u8"Время задержки трейсера")
+                    if imgui.SliderInt("##renderWidthLines2", elements.int.sizeOffLine, 1, 10) then
+                        mainini.config.sizeOffLine = elements.int.sizeOffLine.v
+                    end 
+                    imgui.SameLine() 
+                    imgui.Text(u8"Толщина линий")
+                    if imgui.SliderInt('##sizeTraicerEnd2', elements.int.sizeOffPolygonEnd, 1, 10) then
+                        mainini.config.sizeOffPolygonEnd = elements.int.sizeOffPolygonEnd.v
+                    end  
+                    imgui.SameLine() 
+                    imgui.Text(u8"Размер окончания трейсера")
+                    if imgui.SliderInt('##endNumber2', elements.int.rotationPolygonEnd, 2, 10) then
+                        mainini.config.rotationPolygonEnd = elements.int.rotationPolygonEnd.v 
+                    end 
+                    imgui.SameLine() 
+                    imgui.Text(u8"Количество углов на окончаниях")
+                    if imgui.SliderInt('##rotationOne2', elements.int.degreePolygonEnd, 0, 360) then
+                        mainini.config.degreePolygonEnd = elements.int.degreePolygonEnd.v
+                    end 
+                    imgui.SameLine() 
+                    imgui.Text(u8"Градус поворота окончания")
+                    if imgui.SliderInt('##maxMyBullets2', elements.int.maxLineLimit, 10, 300) then
+                        mainini.config.maxLineLimit = elements.int.maxLineLimit.v
+                    end 
+                    imgui.SameLine() 
+                    imgui.Text(u8"Максимальное количество линий")
+                    imgui.PopItemWidth()
+                    imgui.Separator()
+                    imgui.Text(u8"Укажите цвет трейсера, если: ")
+                    if imgui.ColorEdit4("##dinamicObject", dinamicObject, imgui.ColorEditFlags.NoInputs) then
+                        mainini.config.dinamicObject = imgui.ImColor(imgui.ImColor.FromFloat4(dinamicObject.v[3], dinamicObject.v[2], dinamicObject.v[1], dinamicObject.v[4]):GetVec4()):GetU32()
+                    end 
+                    imgui.SameLine() 
+                    imgui.Text(u8"Игрок попал в динамический объект")
+                    if imgui.ColorEdit4("##staticObject", staticObject, imgui.ColorEditFlags.NoInputs) then
+                        mainini.config.staticObject = imgui.ImColor(imgui.ImColor.FromFloat4(staticObject.v[3], staticObject.v[2], staticObject.v[1], staticObject.v[4]):GetVec4()):GetU32()
+                    end 
+                    imgui.SameLine() 
+                    imgui.Text(u8"Игрок попал в статический объект")
+                    if imgui.ColorEdit4("##ped", pedP, imgui.ColorEditFlags.NoInputs) then
+                        mainini.config.pedP = imgui.ImColor(imgui.ImColor.FromFloat4(pedP.v[3], pedP.v[2], pedP.v[1], pedP.v[4]):GetVec4()):GetU32()
+                    end 
+                    imgui.SameLine() 
+                    imgui.Text(u8"Игрок попал в игрока")
+                    if imgui.ColorEdit4("##car", carP, imgui.ColorEditFlags.NoInputs) then
+                        mainini.config.carP = imgui.ImColor(imgui.ImColor.FromFloat4(carP.v[3], carP.v[2], carP.v[1], carP.v[4]):GetVec4()):GetU32()
+                    end 
+                    imgui.SameLine() 
+                    imgui.Text(u8"Игрок попал в машину")
+                    imgui.Separator()
                 end
-                imgui.Text(u8"Максимальное кол-тво сообщений")
-                imgui.SameLine()
-                imgui.PushItemWidth(100)
-                if imgui.InputText(u8'##pagesize', pagesize) then
-                    mainini.config.pagesize  = pagesize.v
-                    inicfg.save(mainini, savee)
-                end
-                imgui.Text(u8"Кнопка для прокрутки сообщений")
-                imgui.SameLine()
-                imgui.PushItemWidth(100)
-                if imgui.InputText(u8'##secondaryKey', secondaryKey) then
-                    mainini.config.secondaryKey = secondaryKey.v
-                    inicfg.save(mainini, savee)
-                end
-                imgui.PushFont(fsClock) imgui.CenterTextColoredRGB('ATools') imgui.PopFont()
-                if imadd.ToggleButton('##adminpass', adminpassACT) then
-                    mainini.config.adminpassACT = adminpassACT.v
-                    inicfg.save(mainini, savee)
-                end
-                imgui.SameLine()
-                imgui.Text(u8"Автоматически вход в админ-панели")
-                imgui.SameLine()
-                imgui.PushItemWidth(100)
-                if imgui.InputText(u8'##adminpass', adminpass) then
-                    mainini.config.adminpass = adminpass.v
-                    inicfg.save(mainini, savee)
-                end
-                if imadd.ToggleButton('##az', adminzonea) then
-                    mainini.config.adminzonea = adminzonea.v
-                    inicfg.save(mainini, savee)
-                end
-                imgui.SameLine()
-                imgui.Text(u8"АвтоТП")
-                imgui.SameLine()
-                imgui.PushItemWidth(50)
-                if imgui.InputText(u8'##az', adminzone) then
-                    mainini.config.adminzone = adminzone.v
-                    inicfg.save(mainini, savee)
-                end
-                imgui.SameLine()
-                imgui.PushItemWidth(50)
-                if imadd.ToggleButton('##esc', esc) then
-                    mainini.config.esc = esc.v
-                    inicfg.save(mainini, savee)
-                end
-                imgui.SameLine()
-                imgui.Text(u8"Закрывать Admin Tools на ESC")
-                if imadd.ToggleButton('##jail', jail) then
-                    mainini.config.jail = jail.v
-                    inicfg.save(mainini, savee)
-                end
-                imgui.SameLine()
-                imgui.Text(u8"Автоматически принимать форму для /jail   ")
-                imgui.SameLine()
-                if imgui.Button(u8'Меню##1') then
-                    jailmenu = true
-                end
-                imgui.Spacing()
-                if imadd.ToggleButton('##warn', warn) then
-                    mainini.config.warn = warn.v
-                    inicfg.save(mainini, savee)
-                end
-                imgui.SameLine()
-                imgui.Text(u8"Автоматически принимать форму для /warn")
-                imgui.SameLine()
-                if imgui.Button(u8'Меню##2') then
-                    warnmenu = true
-                end
-                imgui.Spacing()
-                if imadd.ToggleButton('##mute', mute) then
-                    mainini.config.mute = mute.v
-                    inicfg.save(mainini, savee)
-                end
-                imgui.SameLine()
-                imgui.Text(u8"Автоматически принимать форму для /mute")
-                imgui.SameLine()
-                if imgui.Button(u8'Меню##3') then
-                    mutemenu = true
-                end
-                imgui.Spacing()
-                if imadd.ToggleButton('##sban', sban) then
-                    mainini.config.sban = sban.v
-                    inicfg.save(mainini, savee)
-                end
-                imgui.SameLine()
-                imgui.Text(u8"Автоматически принимать форму для /sban ")
-                imgui.SameLine()
-                if imgui.Button(u8'Меню##4') then
-                    sbanmenu = true
-                end
-                if imadd.ToggleButton('##ban', ban) then
-                    mainini.config.ban = ban.v
-                    inicfg.save(mainini, savee)
-                end
-                imgui.SameLine()
-                imgui.Text(u8"Автоматически принимать форму для /ban   ")
-                imgui.SameLine()
-                if imgui.Button(u8'Меню##5') then
-                    banmenu = true
-                end
-                imgui.Spacing()
-                if imadd.ToggleButton('##skick', skick) then
-                    mainini.config.skick = skick.v
-                    inicfg.save(mainini, savee)
-                end
-                imgui.SameLine()
-                imgui.Text(u8"Автоматически принимать форму для /skick ")
-                imgui.SameLine()
-                if imgui.Button(u8'Меню##6') then
-                    skickmenu = true
-                end
-                imgui.Spacing()
-                if imadd.ToggleButton('##kick', kick) then
-                    mainini.config.kick = kick.v
-                    inicfg.save(mainini, savee)
-                end
-                imgui.SameLine()
-                imgui.Text(u8"Автоматически принимать форму для /kick  ")
-                imgui.SameLine()
-                if imgui.Button(u8'Меню##7') then
-                    kickmenu = true
-                end
-                imgui.Spacing()
-                if imadd.ToggleButton('##report', report) then
-                    mainini.config.report = report.v
-                    inicfg.save(mainini, savee)
-                end
-                imgui.SameLine()
-                imgui.Text(u8"Автоматически брать репорт")
             imgui.EndChild()
             if imgui.Button(u8'Сохранить', imgui.ImVec2(-1, 20)) then
                 if inicfg.save(mainini, 'AdminTools/AdminTools.ini') then
@@ -1892,8 +2145,9 @@ function imgui.OnDrawFrame()
             --imgui.Text(u8'Report: '..rstat..' раз')
             --imgui.Text(u8'Muts: '..mstat..' раз')
         end
-    imgui.End()
+        imgui.End()
     end
+    -- Демоган меню
     if jailmenu then
         imgui.OpenPopup(u8'Выдача джаила')
         if imgui.BeginPopupModal(u8'Выдача джаила', true, imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoResize) then
@@ -1930,6 +2184,7 @@ function imgui.OnDrawFrame()
             imgui.EndPopup()
         end
     end
+    -- СБан меню
     if sbanmenu then
         imgui.OpenPopup(u8'Выдача сбана')
         if imgui.BeginPopupModal(u8'Выдача сбана', true, imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoResize) then
@@ -1966,6 +2221,7 @@ function imgui.OnDrawFrame()
             imgui.EndPopup()
         end
     end
+    -- Бан меню
     if banmenu then
         imgui.OpenPopup(u8'Выдача бана')
         if imgui.BeginPopupModal(u8'Выдача бана', true, imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoResize) then
@@ -2002,6 +2258,7 @@ function imgui.OnDrawFrame()
             imgui.EndPopup()
         end
     end
+    -- СКик меню
     if skickmenu then
         imgui.OpenPopup(u8'Выдача скика')
         if imgui.BeginPopupModal(u8'Выдача скика', true, imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoResize) then
@@ -2038,6 +2295,7 @@ function imgui.OnDrawFrame()
             imgui.EndPopup()
         end
     end
+    -- Кик меню
 	if kickmenu then
         imgui.OpenPopup(u8'Выдача кика')
         if imgui.BeginPopupModal(u8'Выдача кика', true, imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoResize) then
@@ -2074,6 +2332,7 @@ function imgui.OnDrawFrame()
             imgui.EndPopup()
         end
     end
+    -- Варн меню
     if warnmenu then
         imgui.OpenPopup(u8'Выдача варна')
         if imgui.BeginPopupModal(u8'Выдача варна', true, imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoResize) then
@@ -2108,7 +2367,9 @@ function imgui.OnDrawFrame()
                 warnmenu = false
             end
             imgui.EndPopup()
-    end end
+        end 
+    end
+    -- Мут меню
     if mutemenu then
         imgui.OpenPopup(u8'Выдача мута')
         if imgui.BeginPopupModal(u8'Выдача мута', true, imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoResize) then
@@ -2143,7 +2404,9 @@ function imgui.OnDrawFrame()
                 mutemenu = false
             end
             imgui.EndPopup()
-    end end
+        end 
+    end
+    -- Репорт меню ответа
     if reportmenu then
         imgui.OpenPopup(u8'Ответ на репорт')
         if imgui.BeginPopupModal(u8'Ответ на репорт', true, imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoResize) then
@@ -2194,8 +2457,33 @@ function imgui.OnDrawFrame()
                 reportmenu = false
             end
             imgui.EndPopup()
-    end end
-    -- timer window >>
+        end 
+    end
+    -- Временная лидерка
+    if templead then
+        imgui.OpenPopup(u8'Выбор лидерки')
+        if imgui.BeginPopupModal(u8'Выбор лидерки', true, imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoResize) then
+            imgui.ShowCursor = true
+            imgui.CenterText(u8" ----- Выбор лидерки ----- ")
+            imgui.NewLine()
+            local wid = imgui.GetWindowWidth()
+            imgui.SetCursorPosX(wid / 2 - 50)
+            if imgui.Button(u8'Взять лидерку',imgui.ImVec2(100,30)) then
+                sampSendChat(''..(u8:decode(JailText.v)), -1)
+                imgui.CloseCurrentPopup()
+                imgui.ShowCursor = false
+                templead = false
+            end
+            imgui.SetCursorPosX(wid / 2 - 50)
+            if imgui.Button(u8'Закрыть',imgui.ImVec2(100,30)) then
+                imgui.CloseCurrentPopup()
+                imgui.ShowCursor = false
+                templead = false
+            end
+            imgui.EndPopup()
+        end
+    end
+    -- Таймер окно
     if to.v and not recon then
     	imgui.PushStyleColor(imgui.Col.WindowBg, imgui.ImVec4(imgui.ImColor(argbW):GetFloat4()))
 	    imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(imgui.ImColor(argbT):GetFloat4()))
@@ -2243,23 +2531,35 @@ function imgui.OnDrawFrame()
 end
 -- main
 function main()
-	--print("Твой ид:"..getserial())
-	--checkKey()
+	print("Твой ид:"..getserial())
+	checkKey()
     --autoupdate("https://raw.githubusercontent.com/codero4ik/atols/main/updates.json", '['..string.upper(thisScript().name)..']: ', "https://raw.githubusercontent.com/codero4ik/atols/main/updates.json")
     while not isSampAvailable() do wait(100) end
     --bubbleBox = ChatBox(pagesize, mainini.config.blacklist)
+    --Трайсер пуль
+    staticObject = imgui.ImFloat4( imgui.ImColor( explode_argb(mainini.config.staticObject) ):GetFloat4() )    
+    dinamicObject = imgui.ImFloat4( imgui.ImColor( explode_argb(mainini.config.dinamicObject) ):GetFloat4() )   
+    pedP = imgui.ImFloat4( imgui.ImColor( explode_argb(mainini.config.pedP) ):GetFloat4() )   
+    carP = imgui.ImFloat4( imgui.ImColor( explode_argb(mainini.config.carP) ):GetFloat4() ) 
+    staticObjectMy = imgui.ImFloat4( imgui.ImColor( explode_argb(mainini.config.staticObjectMy) ):GetFloat4() )    
+    dinamicObjectMy = imgui.ImFloat4( imgui.ImColor( explode_argb(mainini.config.dinamicObjectMy) ):GetFloat4() )   
+    pedPMy = imgui.ImFloat4( imgui.ImColor( explode_argb(mainini.config.pedPMy) ):GetFloat4() )   
+    carPMy = imgui.ImFloat4( imgui.ImColor( explode_argb(mainini.config.carPMy) ):GetFloat4() ) 
+    --Проверка на девелопера
     developer()
+    --Загрузка
     if bNotf then
         notf.addNotification("[AdminTools]: Loaded! \n Author: Coderok, Alex", 5, 1)
     end
     if not doesFileExist('moonloader/config/AdminTools/AdminTools.ini') then
         if inicfg.save(mainini, 'AdminTools/AdminTools.ini') then sampfuncsLog(tag..'Создан файл конфигурации: AdminTools.ini') end
     end
+    --Таймер
     if mainini.statTimers.server ~= nil and mainini.statTimers.server ~= sampGetCurrentServerAddress() then
         sampAddChatMessage(tag..'Вы зашли на свой не основной сервер. Скрипт отключён!', mcx)
         thisScript():unload()
     end
-     if mainini.onDay.today ~= os.date("%a") then
+    if mainini.onDay.today ~= os.date("%a") then
         mainini.onDay.today = os.date("%a")
         mainini.onDay.online = 0
         mainini.onDay.full = 0
@@ -2279,7 +2579,9 @@ function main()
     lua_thread.create(time)
     lua_thread.create(autoSave)
     ClickWP = lua_thread.create(ClickWP)
+    --Смена название окна
     ffi.C.SetWindowTextA(ffi.C.GetActiveWindow(), '* ATools By Codero4ek/Alex')
+    --Бесконечный цикл
     while true do wait(0) imgui.Process = true
         imgui.Process = to.v
         if active_menu.v then
@@ -2302,7 +2604,7 @@ function main()
         if isKeyJustPressed(VK_F2) and not sampIsChatInputActive() and not isSampfuncsConsoleActive() then
             active_menu.v = not active_menu.v
         end
-
+        -- ГМ
         if godmode.v then
             setCharProofs(PLAYER_PED, true, true, true, true, true)
             writeMemory(0x96916D, 1,  1, true)
@@ -2320,5 +2622,57 @@ function main()
             local cped1 = cped + 66
             writeMemory(cped1, 1, 0, false)
         end
+        -- Трейсер пуль
+        local oTime = os.time()
+        if elements.checkbox.drawBullets.v then
+            for i = 1, bulletSync.maxLines do
+                if bulletSync[i].other.time >= oTime then
+                    local result, wX, wY, wZ, wW, wH = convert3DCoordsToScreenEx(bulletSync[i].other.o.x, bulletSync[i].other.o.y, bulletSync[i].other.o.z, true, true)
+                    local resulti, pX, pY, pZ, pW, pH = convert3DCoordsToScreenEx(bulletSync[i].other.t.x, bulletSync[i].other.t.y, bulletSync[i].other.t.z, true, true)
+                    if result and resulti then
+                        local xResolution = memory.getuint32(0x00C17044)
+                        if wZ < 1 then
+                            wX = xResolution - wX
+                        end
+                        if pZ < 1 then
+                            pZ = xResolution - pZ
+                        end 
+                        if 1 < wZ then
+                            if 1 < pZ then
+                                renderDrawLine(wX, wY, pX, pY, elements.int.sizeOffLine.v, bulletSyncMy[i].other.color)
+                                renderDrawPolygon(pX, pY-1, 3 + elements.int.sizeOffPolygonEnd.v, 3 + elements.int.sizeOffPolygonEnd.v, 1 + elements.int.rotationPolygonEnd.v, elements.int.degreePolygonEnd.v, bulletSync[i].other.color)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        if elements.checkbox.drawMyBullets.v then
+            for i = 1, bulletSyncMy.maxLines do
+                if bulletSyncMy[i].my.time >= oTime then
+                    local result, wX, wY, wZ, wW, wH = convert3DCoordsToScreenEx(bulletSyncMy[i].my.o.x, bulletSyncMy[i].my.o.y, bulletSyncMy[i].my.o.z, true, true)
+                    local resulti, pX, pY, pZ, pW, pH = convert3DCoordsToScreenEx(bulletSyncMy[i].my.t.x, bulletSyncMy[i].my.t.y, bulletSyncMy[i].my.t.z, true, true)
+                    if result and resulti then
+                        local xResolution = memory.getuint32(0x00C17044)
+                        if wZ < 1 then
+                            wX = xResolution - wX
+                        end
+                        if pZ < 1 then
+                            pZ = xResolution - pZ
+                        end 
+                        if 1 < wZ then
+                            if 1 < pZ then
+                                renderDrawLine(wX, wY, pX, pY, elements.int.sizeOffMyLine.v, bulletSyncMy[i].my.color)
+                                renderDrawPolygon(pX, pY-1, 3 + elements.int.sizeOffMyPolygonEnd.v, 3 + elements.int.sizeOffMyPolygonEnd.v, 1 + elements.int.rotationMyPolygonEnd.v, elements.int.degreeMyPolygonEnd.v, bulletSyncMy[i].my.color)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        -- Фикс чата 
+        if isKeyJustPressed(0x54 --[[VK_T]]) and not sampIsDialogActive() and not sampIsScoreboardOpen() and not isSampfuncsConsoleActive() then
+			sampSetChatInputEnabled(true)
+		end
     end
 end
