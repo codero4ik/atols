@@ -1,0 +1,40 @@
+{
+  "lists": [
+    {
+      "title": "ATools",
+      "color": 4294967295.0,
+      "isbuiltin": true,
+      "users": [
+        "Nikita_Dobrov",
+        "Hola"
+      ],
+      "ip": "127.0.0.1",
+      "port": 7777
+    }
+  ],
+  "settings": {
+    "listFontName": "Arial",
+    "renderID": true,
+    "renderHotKey": {
+      "v": [
+        113
+      ]
+    },
+    "listFontSize": 9,
+    "hideOnOpenChat": false,
+    "headerFontName": "Arial",
+    "notificationsAboutJoinsAndQuits": true,
+    "isRenderEnabledByDefault": false,
+    "headerPosX": 643,
+    "headerFontSize": 9,
+    "renderTime": 3000,
+    "renderLevel": true,
+    "headerFontFlags": 5,
+    "hideOnScreenshot": false,
+    "listFontFlags": 5,
+    "headerPosY": 5,
+    "headerText": "Users online",
+    "headerFontColor": 4294967295.0,
+    "renderHotKeyType": 0
+  }
+}
